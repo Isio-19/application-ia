@@ -4,7 +4,7 @@ import math
 import sys
 
 def get_files_name():
-    file_names = pd.read_csv("OUVRAGES.csv")["Ouvrage"]
+    file_names = pd.read_csv("OUVRAGES.csv")["Ouvrage"].astype("str")
 
     return_array = []
     for file in file_names:
@@ -122,19 +122,10 @@ def split_all_files(fill_data):
     for file in files: 
         split_file(file, fill_data)
 
-def main():
-    # get args
-    na_threshhold = -1
-    fill_data = False
-
-    args = sys.argv
-    for i, var in enumerate(args):
-        if var == "na" and (len(args) > i+1) and (args[i+1].replace(".", "", 1).isdigit()):
-            na_threshhold = float(args[i+1])
-
-        if var == "-fill":
-            fill_data = True
-
+"""
+Usage: python3 make_data.py -fill na 0.1
+"""
+def main(na_threshhold, fill_data):
     print("Commenting OUVRAGES.csv")
     comment_files(na_threshhold)
     normalize_all_files()
@@ -148,3 +139,16 @@ def main():
 
 # Detect only single date point NAN's (and averaging them)
 
+# get args
+na_threshhold = -1
+fill_data = False
+
+args = sys.argv
+for i, var in enumerate(args):
+    if var == "na" and (len(args) > i+1) and (args[i+1].replace(".", "", 1).isdigit()):
+        na_threshhold = float(args[i+1])
+
+    if var == "-fill":
+        fill_data = True
+
+# main(na_threshhold, fill_data)

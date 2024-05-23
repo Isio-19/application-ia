@@ -1,5 +1,8 @@
 __pycache__/
-data/
-filled_data/
-normalized_data/
-split_data/
+data/*
+filled_data/*
+normalized_data/*
+split_data/*/*
+model/*
+isio_internship.sh
+plot.png
