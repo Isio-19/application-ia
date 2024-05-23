@@ -43,10 +43,9 @@ class NeuralNetwork(Module):
     # TODO: ask what is the use of returning ht 
     def forward(self, x, ht = None):
         if ht is None:
-
             ht = torch.zeros(self.nb_layers, x.size(0), self.layer_size).to(x.device)
             ct = torch.zeros(self.nb_layers, x.size(0), self.layer_size).to(x.device)
-        
+
         out, (ht, ct) = self.LSTM(x, (ht, ct))
         out = self.linear(out)
 
@@ -101,7 +100,6 @@ def train_loop(training_data, dev_data, model, path_to_save, loss_fn, opt_fn, nb
     for epoch in (bar := tqdm(range(nb_epoch))):
         model.train()
         train_loss = 0
-
         for x, y in training_data:
             opt_fn.zero_grad()
             pred = model.forward(x)
@@ -109,17 +107,14 @@ def train_loop(training_data, dev_data, model, path_to_save, loss_fn, opt_fn, nb
             train_loss += loss.item() / len(training_data)
             loss.backward()
             opt_fn.step()
-
         train_losses.append(train_loss)
 
         model.eval()
         dev_loss = 0
-
         for x, y in dev_data:
             pred = model.forward(x)
             loss = loss_fn(pred, y)
             dev_loss += loss.item() / len(dev_data) 
-
         dev_losses.append(dev_loss)
 
         if dev_loss < best_dev_loss:
@@ -155,11 +150,14 @@ def plot(t_loss, d_loss):
     plt.ylabel("Loss value")
     plt.savefig("plot.png")
 
+# PARAMETERS
 DEVICE = torch.device("cpu")
 if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 
 # DATA
+batch_size = 16
+shuffle = True
 make_data = False
 na_threshhold = -1
 fill_data = False
@@ -175,25 +173,20 @@ for i, var in enumerate(args):
     if var == "-fill":
         fill_data = True
 
-if make_data:
-    main(na_threshhold, fill_data)
-
-train_ds, dev_ds, test_ds = read_files()
-train_dl, dev_dl, test_dl = create_dataloader(batch_size=32, shuffle=False)
-
-for x, y in train_dl:
-    print(f"Data:\n{x}")
-    print(f"Labels:\n{y}")
-
-
-# MODEL PARAMETERS
+# MODEL
 input_size = 4
 output_size = 1
 nb_layers = 5
 layer_size = 2
-lr = 0.0005
+lr = 0.00005
 nb_epoch = 200
 path_to_best_model = "model/best_model.pt"
+
+if make_data:
+    main(na_threshhold, fill_data)
+
+train_ds, dev_ds, test_ds = read_files()
+train_dl, dev_dl, test_dl = create_dataloader(batch_size=batch_size, shuffle=False)
 
 model = NeuralNetwork(
     input_size=input_size,

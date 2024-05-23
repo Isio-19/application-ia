@@ -1,5 +1,15 @@
-# average percentage of NA on all the files
+# Introduction
 
+Filtrage des données, si trop de NA, on n'utilise pas le fichier
+Seuil arbitraire à 15% de NA
+Après filtre, on remplace les NA par la moyenne des autres valeurs
+
+# Part 1
+
+Pour éviter que le répo devienne trop lourd, seulement les 20 premiers fichiers (après filtrage) vont être traités
+
+
+# average percentage of NA on all the files
 
 |    GWL     |   P   |     T      |     ET     |    NDVI    |
 | :--------: | :---: | :--------: | :--------: | :--------: |
