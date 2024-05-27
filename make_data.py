@@ -1,6 +1,7 @@
+from utils import is_int, is_float, script_error_print
+
 import pandas as pd
 import numpy as np
-import math
 import sys
 
 def get_files_name():
@@ -105,7 +106,7 @@ def split_file(file_name, filled_data = False):
 
     file_content = pd.read_csv(f"{path}/{file_name}.csv")
 
-    first_index  = len(file_content) - 24
+    first_index  = len(file_content) - 36
     second_index = len(file_content) - 12
 
     train_data = file_content[:first_index]
@@ -140,15 +141,25 @@ def main(na_threshhold, fill_data):
 # Detect only single date point NAN's (and averaging them)
 
 # get args
-na_threshhold = -1
-fill_data = False
+NA_THRESHHOLD = -1
+FILL_DATA = False
 
 args = sys.argv
 for i, var in enumerate(args):
-    if var == "na" and (len(args) > i+1) and (args[i+1].replace(".", "", 1).isdigit()):
-        na_threshhold = float(args[i+1])
-
-    if var == "-fill":
-        fill_data = True
-
-# main(na_threshhold, fill_data)
+    try:
+        match var: 
+            case "-na" | "--na_threshhold":
+                if not is_float(args, i+1):
+                    raise Exception()
+                NA_THRESHHOLD = float(args[i+1])
+            case "-fd" | "--fill_data":
+                FILL_DATA = True
+            case _:
+                if not(is_float(args, i)) and not(is_int(args, i)):
+                    raise Exception()
+                pass
+    except Exception as e:
+        script_error_print()
+        exit()
+    
+main(NA_THRESHHOLD, FILL_DATA)

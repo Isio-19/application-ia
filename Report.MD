@@ -3,10 +3,32 @@
 Filtrage des données, si trop de NA, on n'utilise pas le fichier
 Seuil arbitraire à 15% de NA
 Après filtre, on remplace les NA par la moyenne des autres valeurs
-
+Analyse rapide sur les 
 # Part 1
 
 Pour éviter que le répo devienne trop lourd, seulement les 20 premiers fichiers (après filtrage) vont être traités
+Mettre les images générées et les matrices de ccc 
+
+# Part 2
+
+## Sub-part a
+
+Initialisation xavier
+
+Problems:
+> truc_bizarre/
+
+| Batch_size | Gen_loss | Training time     |
+| ---------: | -------- | ----------------- |
+|          1 | 1.1593   | 220,545 456 120 s |
+|          5 | 1.1651   | 83,523 212 036 s  |
+|         10 | 1.1667   | 46,912 642 258 s  |
+|         15 | 1.2291   | 49,794 828 233 s  |
+|         20 | 1.1692   | 29,035 535 458 s  |
+
+Taille du batch ne semble pas influencer les performances du modèle mais plus le batch est grand, plus le temps d'apprentissage est court
+
+
 
 
 # average percentage of NA on all the files

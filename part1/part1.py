@@ -13,14 +13,14 @@ def get_files_name():
 
     return return_array
 
-def make_graph(file_content, path):
+def make_graph(file_content, title, path):
     x =  [i for i in range(len(file_content["date"]))]
     for var in ["P", "T", "ET", "NDVI", "GWL"]:
         plt.plot(x, file_content[var], label=f"{var}")
     plt.legend(loc="best")
     plt.xlabel("Date")
     plt.ylabel("Value")
-    plt.plot()
+    plt.title(title)
     plt.savefig(path)
     plt.clf()
     
@@ -54,11 +54,11 @@ def save_ccc(path, file_content):
 
 for file in get_files_name()[:20]:
     file_content = pd.read_csv(f"data/{file}.csv")    
-    make_graph(file_content, f"part1/img/std/{file}.png")
+    make_graph(file_content, f"Variable values of {file} standard file", f"part1/img/std/{file}.png")
     
     save_ccc(f"part1/ccc/std/{file}.csv", file_content)
 
     file_content = normalize_file(file_content)
-    make_graph(file_content, f"part1/img/norm/{file}.png")
+    make_graph(file_content, f"Variable values of {file} normalized file", f"part1/img/norm/{file}.png")
     
     save_ccc(f"part1/ccc/norm/{file}.csv", file_content)

@@ -6,3 +6,5 @@ split_data/*/*
 model/*
 isio_internship.sh
 plot.png
+truc_bizarre/
+model_test/*
