@@ -135,18 +135,18 @@ def train_loop(training_data, dev_data, model, path_to_save_model, path_to_save_
             opt_fn.zero_grad()
             pred = model.forward(x)
             loss = loss_fn(pred, y)
-            train_loss += loss.item() / len(training_data)
+            train_loss += loss.item()
             loss.backward()
             opt_fn.step()
-        train_losses.append(train_loss)
+        train_losses.append(train_loss / len(training_data.dataset))
 
         model.eval()
         dev_loss = 0
         for x, y in dev_data:
             pred = model.forward(x)
             loss = loss_fn(pred, y)
-            dev_loss += loss.item() / len(dev_data) 
-        dev_losses.append(dev_loss)
+            dev_loss += loss.item()
+        dev_losses.append(dev_loss / len(dev_data.dataset) )
 
         if best_dev_loss > dev_loss:
             best_dev_loss = dev_loss
@@ -169,9 +169,9 @@ def test_loop(model, path_best_model, test_data, loss_fn):
     for x, y in test_data:
         pred = model.forward(x)
         loss = loss_fn(pred, y)
-        test_loss += loss.item() / len(test_data)
+        test_loss += loss.item()
     
-    print(f"Loss of {test_loss:.4f} obtained with best model")
+    print(f"Loss of {(test_loss / len(test_data.dataset)):.4f} obtained with best model")
 
 def plot(t_loss, d_loss, title):
     x = [i for i in range(len(t_loss))]
@@ -204,7 +204,7 @@ if torch.cuda.is_available():
     DEVICE = torch.device("cuda")
 
 # DATA
-FIRST_FILES = 20
+FIRST_FILES = -1
 MAKE_DATA = False
 NA_THRESHHOLD = -1
 FILL_DATA = False
@@ -272,12 +272,12 @@ for i, var in enumerate(args):
                 pass
 
     except Exception as e:
-        # TODO: make a utils file to hide this mess
-        script_error_print()
+        print(f"The variable {var} is wrong")
+        script_error_print("make_model.py")
         exit()
     
-path_to_best_model = f"model/seed_{SEED}_bs_{BATCH_SIZE}_nl_{nb_layers}_ls_{layer_size}_d_{dropout}_lr_{learning_rate}_e_{nb_epoch}.pt"
-path_to_plot = f"model_test/seed_{SEED}_bs_{BATCH_SIZE}_nl_{nb_layers}_ls_{layer_size}_d_{dropout}_lr_{learning_rate}_e_{nb_epoch}.png"
+path_to_best_model = f"model/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_lr_{learning_rate}_nl_{nb_layers}_ls_{layer_size}.pt"
+path_to_plot = f"model_img/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_lr_{learning_rate}_nl_{nb_layers}_ls_{layer_size}.png"
 
 if SEED != -1:
     torch.manual_seed(SEED)
@@ -304,3 +304,6 @@ print(f"Training time: {end_time-start_time} ns")
 
 test_loop(model, path_to_best_model, test_dl, loss_fn)
 
+# VOIR TAILLE DES DATASETS LORSQUE LE CALCUL DE LOSS
+# TODO: faire la moyenne sur les nans selon le mois
+# TODO: tester sans la normalisation

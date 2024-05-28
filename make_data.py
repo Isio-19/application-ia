@@ -78,7 +78,11 @@ def normalize_all_files():
         normalize_file(file)
 
 def mean_na(file_name):
-    file_content = pd.read_csv(f"normalized_data/{file_name}.csv")
+    file_path = f"data/{file_name}.csv"
+    if NORMALIZE:
+        file_path = f"normalized_data/{file_name}.csv"
+    
+    file_content = pd.read_csv(file_path)
     GWL_mean  = np.nanmean(file_content["GWL"])
     P_mean    = np.nanmean(file_content["P"])
     T_mean    = np.nanmean(file_content["T"])
@@ -99,14 +103,10 @@ def mean_all_files():
     for file in files:
         mean_na(file)
 
-def split_file(file_name, filled_data = False):
-    path = "normalized_data"
-    if filled_data:
-        path = "filled_data"
+def split_file(file_name):
+    file_content = pd.read_csv(f"filled_data/{file_name}.csv")
 
-    file_content = pd.read_csv(f"{path}/{file_name}.csv")
-
-    first_index  = len(file_content) - 36
+    first_index  = len(file_content) - 24
     second_index = len(file_content) - 12
 
     train_data = file_content[:first_index]
@@ -117,32 +117,36 @@ def split_file(file_name, filled_data = False):
     dev_data.to_csv(f"split_data/dev_data/{file_name}.csv", index=False)
     test_data.to_csv(f"split_data/test_data/{file_name}.csv", index=False)
 
-def split_all_files(fill_data):
+def split_all_files():
     files = get_files_name()
 
     for file in files: 
-        split_file(file, fill_data)
+        split_file(file)
 
 """
 Usage: python3 make_data.py -fill na 0.1
 """
-def main(na_threshhold, fill_data):
-    print("Commenting OUVRAGES.csv")
+def main(na_threshhold):
+    if not QUIET:
+        print("Commenting OUVRAGES.csv")
     comment_files(na_threshhold)
-    normalize_all_files()
+    if NORMALIZE:   
+        normalize_all_files()
 
-    if fill_data:
+    if not QUIET:
         print("Filling the NanS with mean")
-        mean_all_files()
+    mean_all_files()
 
-    print("Spliting the data files")
-    split_all_files(fill_data)
+    if not QUIET:
+        print("Spliting the data files")
+    split_all_files()
 
 # Detect only single date point NAN's (and averaging them)
 
 # get args
 NA_THRESHHOLD = -1
-FILL_DATA = False
+NORMALIZE = False
+QUIET = False
 
 args = sys.argv
 for i, var in enumerate(args):
@@ -152,14 +156,19 @@ for i, var in enumerate(args):
                 if not is_float(args, i+1):
                     raise Exception()
                 NA_THRESHHOLD = float(args[i+1])
-            case "-fd" | "--fill_data":
-                FILL_DATA = True
+            case "-n" | "--normalize":
+                NORMALIZE = True
+            case "-q" | "--quiet":
+                QUIET = True
+            case "make_data.py":
+                pass
             case _:
                 if not(is_float(args, i)) and not(is_int(args, i)):
                     raise Exception()
                 pass
     except Exception as e:
-        script_error_print()
+        print(f"The variable {var} is wrong")
+        script_error_print("make_data.py")
         exit()
     
-main(NA_THRESHHOLD, FILL_DATA)
+main(NA_THRESHHOLD)
