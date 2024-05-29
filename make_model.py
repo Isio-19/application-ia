@@ -1,4 +1,4 @@
-from utils import script_error_print, get_files_name, is_float, is_int
+from utils import script_error_print, get_files_name, is_float, is_int, is_string
 from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module, LSTM, Linear, L1Loss, MSELoss
 from torch.optim import Adam
@@ -135,18 +135,18 @@ def train_loop(training_data, dev_data, model, path_to_save_model, path_to_save_
             opt_fn.zero_grad()
             pred = model.forward(x)
             loss = loss_fn(pred, y)
-            train_loss += loss.item()
+            train_loss += loss.item() / len(training_data)
             loss.backward()
             opt_fn.step()
-        train_losses.append(train_loss / len(training_data.dataset))
+        train_losses.append(train_loss)
 
         model.eval()
         dev_loss = 0
         for x, y in dev_data:
             pred = model.forward(x)
             loss = loss_fn(pred, y)
-            dev_loss += loss.item()
-        dev_losses.append(dev_loss / len(dev_data.dataset) )
+            dev_loss += loss.item() / len(dev_data)
+        dev_losses.append(dev_loss)
 
         if best_dev_loss > dev_loss:
             best_dev_loss = dev_loss
@@ -169,34 +169,26 @@ def test_loop(model, path_best_model, test_data, loss_fn):
     for x, y in test_data:
         pred = model.forward(x)
         loss = loss_fn(pred, y)
-        test_loss += loss.item()
-    
-    print(f"Loss of {(test_loss / len(test_data.dataset)):.4f} obtained with best model")
+        test_loss += loss.item() / len(test_data)
+    print(f"Loss of {test_loss:.4f} obtained with best model")
 
 def plot(t_loss, d_loss, title):
     x = [i for i in range(len(t_loss))]
-    plt.plot(x, t_loss, "-b", label="Training loss")
+    index = np.argmin(d_loss)
+    d_min = np.min(d_loss)
+    t_val = t_loss[index]
+
     plt.plot(x, d_loss, "-r", label="Validation loss")
+    plt.scatter([index], [d_min], color="red", label=f"Min epoch: {index}, val: {d_min:.4f}")
+    plt.plot(x, t_loss, "-b", label="Training loss")
+    plt.scatter([index], [t_val], color="blue", label=f"Val at min: {t_val:.4f}")
+
     plt.legend(loc="upper left")
     plt.xlabel("Epochs")
     plt.ylabel("Loss value")
     plt.title("Looses over time")
-    annot_min(t_loss, d_loss)
     plt.savefig(title)
     plt.clf()
-
-def annot_min(train, dev):
-    index = np.argmin(dev)
-    dev_min = np.min(dev)
-    train_val = train[index] 
-    
-    dev_text =   f"Minimum value at  epoch {index}\ny={dev_min:.4f}"
-    train_text = f"y={train_val:.4f}"
-    
-    plt.scatter([index], [dev_min],   color="red")
-    plt.scatter([index], [train_val], color="blue")
-    plt.annotate(dev_text,   xy=(index, dev_min),   xytext=(10, -15), textcoords="offset pixels")
-    plt.annotate(train_text, xy=(index, train_val), xytext=(10, -10), textcoords="offset pixels")
 
 # PARAMETERS
 DEVICE = torch.device("cpu")
@@ -214,6 +206,7 @@ BATCH_SIZE = 5
 # MODEL
 SEED = -1
 QUIET = False
+NAME = False
 
 input_size = 4
 output_size = 1
@@ -222,63 +215,83 @@ layer_size = 6
 dropout = 0
 learning_rate = 0.001
 nb_epoch = 1000
+LOSS_FUNCTION = "l1"
 
 # parse the params
-args = argv
-for i, var in enumerate(args):
+args = iter(argv)
+for var in args:
     try:
         match var:
             case "-ff" | "--first_files": 
-                if not is_int(args, i+1):
-                    raise Exception()
-                FIRST_FILES = int(args[i+1])
+                var = next(args)
+                if not var.isdigit():
+                    raise Exception(f"Expected an integer after -ff arg, not {var}")
+                FIRST_FILES = int(var)
             case "-s" | "--shuffle":
                 SHUFFLE = True
             case "-bs" | "--batch_size":
-                if not is_int(args, i+1):
-                    raise Exception()
-                BATCH_SIZE = int(args[i+1])
+                var = next(args)
+                if not var.isdigit():
+                    raise Exception(f"Expected an integer after -bs arg, not {var}")
+                BATCH_SIZE = int(var)
             case "-nl" | "--number_layer":
-                if not is_int(args, i+1):
-                    raise Exception()
-                nb_layers = int(args[i+1])
+                var = next(args)
+                if not var.isdigit():
+                    raise Exception(f"Expected an integer after -nl arg, not {var}")
+                nb_layers = int(var)
             case "-ls" | "--layer_size":
-                if not is_int(args, i+1):
-                    raise Exception()
-                layer_size = int(args[i+1])
+                var = next(args)
+                if not var.isdigit():
+                    raise Exception(f"Expected an integer after -ls arg, not {var}")
+                layer_size = int(var)
             case "-d" | "--dropout":
-                if not is_float(args, i+1):
-                    raise Exception()
-                dropout = float(args[i+1])
+                var = next(args)
+                if not var.replace(".", "", 1).isdigit():
+                    raise Exception(f"Excepted a float after the -d arg, not {var}")
+                dropout = float(var)
             case "-ne" | "--nb_epochs":
-                if not is_int(args, i+1):
-                    raise Exception()
-                nb_epoch = int(args[i+1])
+                var = next(args)
+                if not var.isdigit():
+                    raise Exception(f"Expected an integer after -ne arg, not {var}")
+                nb_epoch = int(var)
             case "-lr" | "--learning_rate":
-                if not is_float(args, i+1):
-                    raise Exception()
-                learning_rate = float(args[i+1])
+                var = next(args)
+                if not var.replace(".", "", 1).isdigit():
+                    raise Exception(f"Excepted a float after the -lr arg, not {var}")
+                learning_rate = float(var)
             case "--seed":
-                if not is_int(args, i+1):
-                    raise Exception()
-                SEED = int(args[i+1])
+                var = next(args)
+                if not var.isdigit():
+                    raise Exception(f"Expected an integer after --seed arg, not {var}")
+                SEED = int(var)
             case "-q" | "--quiet":
                 QUIET = True
+            case "--name":
+                var = next(args)
+                if not var.isascii():
+                    raise Exception(f"Excepted a string after --name arg, not: {var}")
+                NAME = var
+            case "-lf" | "--loss_function":
+                var = next(args)
+                if not var in ["l1", "mse"]:
+                    raise Exception(f"Excepted 'l1' or 'mse' after -lf arg, not: {var}")
+                LOSS_FUNCTION = var
             case "make_model.py":
                 pass
             case _:
-                if not(is_float(args, i)) and not(is_int(args, i)):
-                    raise Exception()
-                pass
+                raise Exception(f"Caught unexpected argument: {var}")
 
     except Exception as e:
-        print(f"The variable {var} is wrong")
+        print(e)
         script_error_print("make_model.py")
         exit()
+  
+path_to_best_model = f"model/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_lr_{learning_rate}_nl_{nb_layers}_ls_{layer_size}_lf_{LOSS_FUNCTION}.pt"
+path_to_plot = f"model_img/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_lr_{learning_rate}_nl_{nb_layers}_ls_{layer_size}_lf_{LOSS_FUNCTION}.png"
+if not NAME == False:
+    path_to_best_model = f"model/{NAME}.pt"
+    path_to_plot = f"model_img/{NAME}.png"
     
-path_to_best_model = f"model/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_lr_{learning_rate}_nl_{nb_layers}_ls_{layer_size}.pt"
-path_to_plot = f"model_img/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_lr_{learning_rate}_nl_{nb_layers}_ls_{layer_size}.png"
-
 if SEED != -1:
     torch.manual_seed(SEED)
     
@@ -292,18 +305,16 @@ model = NeuralNetwork(
     layer_size=layer_size,
     dropout=dropout,
 )
-loss_fn = MSELoss()
-# loss_fn = L1Loss()
+
+loss_fn = None
+if LOSS_FUNCTION == "l1":
+    loss_fn = L1Loss()
+elif LOSS_FUNCTION == "mse":
+    loss_fn = MSELoss()
+    
 opt_fn = Adam(model.parameters(), lr=learning_rate)
 
-start_time = time.perf_counter_ns()
 train_loop(train_dl, dev_dl, model, path_to_best_model, path_to_plot, loss_fn, opt_fn, nb_epoch)
-end_time = time.perf_counter_ns()
-
-print(f"Training time: {end_time-start_time} ns")
-
 test_loop(model, path_to_best_model, test_dl, loss_fn)
 
-# VOIR TAILLE DES DATASETS LORSQUE LE CALCUL DE LOSS
-# TODO: faire la moyenne sur les nans selon le mois
-# TODO: tester sans la normalisation
+# test with shuffle 

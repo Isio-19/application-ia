@@ -1,4 +1,4 @@
-from utils import is_int, is_float, script_error_print
+from utils import is_int, is_float, is_string, script_error_print
 
 import pandas as pd
 import numpy as np
@@ -25,7 +25,7 @@ def get_percentage_na(file_name):
 
     return [gwl_na, p_na, t_na, et_na, ndvi_na]
 
-def comment_files(na_threshhold = 0.2):
+def comment_files(na_threshhold):
     if na_threshhold == -1:
         na_threshhold = 0.2
 
@@ -77,31 +77,57 @@ def normalize_all_files():
             continue
         normalize_file(file)
 
-def mean_na(file_name):
+def mean_on_file(file_name):
     file_path = f"data/{file_name}.csv"
     if NORMALIZE:
         file_path = f"normalized_data/{file_name}.csv"
     
     file_content = pd.read_csv(file_path)
     GWL_mean  = np.nanmean(file_content["GWL"])
-    P_mean    = np.nanmean(file_content["P"])
-    T_mean    = np.nanmean(file_content["T"])
-    ET_mean   = np.nanmean(file_content["ET"])
-    NDVI_mean = np.nanmean(file_content["NDVI"])
-
     file_content["GWL"] =  file_content["GWL"].fillna(GWL_mean)
-    file_content["P"] =    file_content["P"].fillna(P_mean)
-    file_content["T"] =    file_content["T"].fillna(T_mean)
-    file_content["ET"] =   file_content["ET"].fillna(ET_mean)
-    file_content["NDVI"] = file_content["NDVI"].fillna(NDVI_mean)
+    file_content.to_csv(f"filled_data/{file_name}.csv", index=False)
 
+def mean_on_month(file_name):
+    file_path = f"data/{file_name}.csv"
+    if NORMALIZE:
+        file_path = f"normalized_data/{file_name}.csv"
+    
+    file_content = pd.read_csv(file_path)
+    
+    # backup, incase all the values for a certain month are all NA
+    GWL_mean  = np.nanmean(file_content["GWL"])
+    
+    month_mean = [0 for _ in range(12)]
+    
+    for month_index in range(12):
+        month_str = str(month_index+1)
+        if len(month_str) < 2:
+            month_str = "0" + month_str
+            
+        month_mask = file_content["date"].str.contains(rf"[0-9]+-{month_str}-[0-9]+")
+        
+        selected_dates = file_content[month_mask]
+        nan_mask = selected_dates["GWL"].notna()
+        values_to_mean = selected_dates[nan_mask]
+       
+        if len(values_to_mean) == 0:
+            month_mean[month_index] = GWL_mean
+        else:
+            month_mean[month_index] = values_to_mean["GWL"].sum() / len(values_to_mean)
+        
+        file_content.loc[month_mask, ["GWL"]] = file_content.loc[month_mask, ["GWL"]].fillna(month_mean[month_index]) 
+        
     file_content.to_csv(f"filled_data/{file_name}.csv", index=False)
 
 def mean_all_files():
     files = get_files_name()
 
-    for file in files:
-        mean_na(file)
+    if MEAN_TYPE == "file":
+        for file in files: 
+            mean_on_file(file)
+    if MEAN_TYPE == "month":
+        for file in files:
+            mean_on_month(file)
 
 def split_file(file_name):
     file_content = pd.read_csv(f"filled_data/{file_name}.csv")
@@ -123,9 +149,7 @@ def split_all_files():
     for file in files: 
         split_file(file)
 
-"""
-Usage: python3 make_data.py -fill na 0.1
-"""
+
 def main(na_threshhold):
     if not QUIET:
         print("Commenting OUVRAGES.csv")
@@ -147,27 +171,33 @@ def main(na_threshhold):
 NA_THRESHHOLD = -1
 NORMALIZE = False
 QUIET = False
+MEAN_TYPE = "file"
 
-args = sys.argv
-for i, var in enumerate(args):
+args = iter(sys.argv)
+for var in args:
     try:
         match var: 
             case "-na" | "--na_threshhold":
-                if not is_float(args, i+1):
-                    raise Exception()
-                NA_THRESHHOLD = float(args[i+1])
+                var = next(args)
+                if not var.replace(".", "", 1).isdigit():
+                    raise Exception(f"Excepted a float after the -na arg, not {var}")
+                NA_THRESHHOLD = float(var)
             case "-n" | "--normalize":
                 NORMALIZE = True
             case "-q" | "--quiet":
                 QUIET = True
+            case "-m" | "--mean":
+                var = next(args)
+                if not var in ["file", "month"]:
+                    raise Exception(f"Expected 'file' or 'month' after -m arg, not {var}")
+                
+                MEAN_TYPE = var
             case "make_data.py":
                 pass
             case _:
-                if not(is_float(args, i)) and not(is_int(args, i)):
-                    raise Exception()
-                pass
+                raise Exception(f"Unexpected argument: {var}")
     except Exception as e:
-        print(f"The variable {var} is wrong")
+        print(e)
         script_error_print("make_data.py")
         exit()
     

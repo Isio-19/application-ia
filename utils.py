@@ -18,6 +18,9 @@ def is_float(list, index):
 def is_int(list, index):
     return (len(list) > index) and (list[index].isdigit())
 
+def is_string(list, index):
+    return (len(list) > index) and (list[index].isascii())
+
 def script_error_print(script):
     match script:
         case "make_data.py":
@@ -31,6 +34,10 @@ def script_error_print(script):
                 +"\t\t\t\tused when making the data files\n"
                 +"\n"
                 +"-n, --normalize:\tNormalize the chosen files,\n"
+                +"\t\t\tused when making the data files\n"
+                +"\n"
+                +"-m, --mean STRING:\tDefine which method to use to replace the NANs,\n"
+                +"\t\t\tshould be followed by a float which should be 'mean' or 'month',\n"
                 +"\t\t\tused when making the data files\n"
                 +"\n"
                 +"-q, --quiet:\tUsed to suppress the prints\n"
