@@ -1,5 +1,4 @@
 __pycache__/
-data/*
 filled_data/*
 normalized_data/*
 split_data/*/*
