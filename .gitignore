@@ -1,8 +1,8 @@
 __pycache__/
-filled_data/*
-normalized_data/*
-split_data/*/*
+data/split_data/*
+data/temp_files/*
 model/*
+model_img/*
 isio_internship.sh
 plot.png
 truc_bizarre/

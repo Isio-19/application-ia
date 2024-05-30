@@ -1,8 +1,9 @@
-from utils import is_int, is_float, is_string, script_error_print
+from utils import script_error_print
 
 import pandas as pd
 import numpy as np
 import sys
+import time
 
 def get_files_name():
     file_names = pd.read_csv("OUVRAGES.csv")["Ouvrage"].astype("str")
@@ -16,7 +17,7 @@ def get_files_name():
     return return_array
 
 def get_percentage_na(file_name):
-    file = pd.read_csv(f"data/{file_name}.csv")
+    file = pd.read_csv(f"data/raw/{file_name}.csv")
     gwl_na  = file["GWL"].isna().sum()
     p_na    = file["P"].isna().sum()
     t_na    = file["T"].isna().sum()
@@ -37,6 +38,7 @@ def comment_files(na_threshhold):
     file_names = files["Ouvrage"].to_numpy()
 
     for file in file_names:
+        # comment if the file has too many NA's
         count_na = get_percentage_na(file)
         count_na = np.divide(count_na, 237)
 
@@ -46,6 +48,27 @@ def comment_files(na_threshhold):
                 too_many_na_flag = True
                 break
 
+        # comment the file if the validation and testing data NA% are over 40%
+        if not too_many_na_flag: 
+            file_content = pd.read_csv(f"data/raw/{file}.csv")
+            
+            index1 = len(file_content) -24
+            index2 = len(file_content) -12
+            
+            # validation
+            temp_df = file_content.loc[index1:index2-1, "GWL"]
+            na_percent = temp_df.isna().sum()
+            na_percent /= 12 
+            if na_percent > 0.4:
+                too_many_na_flag = True
+            
+            # testing
+            temp_df = file_content.loc[index2:, "GWL"]
+            na_percent = temp_df.isna().sum()
+            na_percent /= 12 
+            if na_percent > 0.4:
+                too_many_na_flag = True
+            
         if too_many_na_flag:
             index = files[files.Ouvrage == file].index[0]
             file_names[index] = "#"+str(file_names[index])
@@ -54,13 +77,24 @@ def comment_files(na_threshhold):
 
     files.to_csv("OUVRAGES.csv", index=False)
 
+def offset_file(file_name):
+    file_content = pd.read_csv(f"data/temp_files/{file_name}.csv")
+    
+    for offset in range(1, 7):
+        column_name=f"GWL+{offset}"
+        offsetted_values = file_content["GWL"].shift(-offset)
+        file_content.insert(offset+1, column=column_name, value=offsetted_values)
+        
+    file_content.drop(file_content.tail(6).index, inplace=True)
+    file_content.to_csv(f"data/temp_files/{file_name}.csv", index=False)
+
 def normalize_list(list):
     mean = np.mean(list)
     std = np.std(list)
     return [(val-mean)/std for val in list]
 
 def normalize_file(file_name):
-    file_content = pd.read_csv(f"data/{file_name}.csv")
+    file_content = pd.read_csv(f"data/raw/{file_name}.csv")
 
     file_content["GWL"] =   normalize_list(file_content["GWL"])
     file_content["P"] =     normalize_list(file_content["P"])
@@ -68,69 +102,72 @@ def normalize_file(file_name):
     file_content["ET"] =    normalize_list(file_content["ET"])
     file_content["NDVI"] =  normalize_list(file_content["NDVI"])
 
-    file_content.to_csv(f"normalized_data/{file_name}.csv", index=False)
-
-def normalize_all_files():
-    files = get_files_name()
-    for file in files:
-        if file[0] == "#":
-            continue
-        normalize_file(file)
+    file_content.to_csv(f"data/temp_files/{file_name}.csv", index=False)
 
 def mean_on_file(file_name):
-    file_path = f"data/{file_name}.csv"
+    file_path = f"data/raw/{file_name}.csv"
     if NORMALIZE:
-        file_path = f"normalized_data/{file_name}.csv"
+        file_path = f"data/temp_files/{file_name}.csv"
     
     file_content = pd.read_csv(file_path)
-    GWL_mean  = np.nanmean(file_content["GWL"])
-    file_content["GWL"] =  file_content["GWL"].fillna(GWL_mean)
-    file_content.to_csv(f"filled_data/{file_name}.csv", index=False)
+
+    for var in ["GWL", "P", "T" ,"ET", "NDVI"]:
+        file_content["GWL"] =  file_content["GWL"].fillna(var)
+
+    file_content.to_csv(f"data/temp_files/{file_name}.csv", index=False)
 
 def mean_on_month(file_name):
-    file_path = f"data/{file_name}.csv"
+    file_path = f"data/raw/{file_name}.csv"
     if NORMALIZE:
-        file_path = f"normalized_data/{file_name}.csv"
+        file_path = f"data/temp_files/{file_name}.csv"
     
     file_content = pd.read_csv(file_path)
     
     # backup, incase all the values for a certain month are all NA
-    GWL_mean  = np.nanmean(file_content["GWL"])
+    means = {
+        "GWL": 0,
+        "P": 0,
+        "T": 0,
+        "ET": 0,
+        "NDVI": 0,
+    }
     
-    month_mean = [0 for _ in range(12)]
+    for var in means:
+        means[var] = np.nanmean(file_content[var]) 
     
-    for month_index in range(12):
-        month_str = str(month_index+1)
-        if len(month_str) < 2:
-            month_str = "0" + month_str
+        month_mean = [0 for _ in range(12)]
+        
+        for month_index in range(12):
+            month_str = str(month_index+1)
+            if len(month_str) < 2:
+                month_str = "0" + month_str
+                
+            month_mask = file_content["date"].str.contains(rf"[0-9]+-{month_str}-[0-9]+")
             
-        month_mask = file_content["date"].str.contains(rf"[0-9]+-{month_str}-[0-9]+")
+            selected_dates = file_content[month_mask]
+            nan_mask = selected_dates[var].notna()
+            values_to_mean = selected_dates[nan_mask]
         
-        selected_dates = file_content[month_mask]
-        nan_mask = selected_dates["GWL"].notna()
-        values_to_mean = selected_dates[nan_mask]
-       
-        if len(values_to_mean) == 0:
-            month_mean[month_index] = GWL_mean
-        else:
-            month_mean[month_index] = values_to_mean["GWL"].sum() / len(values_to_mean)
+            if len(values_to_mean) == 0:
+                month_mean[month_index] = means[var]
+            else:
+                month_mean[month_index] = values_to_mean[var].sum() / len(values_to_mean)
+            
+            file_content.loc[month_mask, [var]] = file_content.loc[month_mask, [var]].fillna(month_mean[month_index]) 
         
-        file_content.loc[month_mask, ["GWL"]] = file_content.loc[month_mask, ["GWL"]].fillna(month_mean[month_index]) 
-        
-    file_content.to_csv(f"filled_data/{file_name}.csv", index=False)
+    file_content.to_csv(f"data/temp_files/{file_name}.csv", index=False)
 
-def mean_all_files():
-    files = get_files_name()
-
-    if MEAN_TYPE == "file":
-        for file in files: 
+def mean_file(file):
+    match MEAN_TYPE:
+        case "file":
             mean_on_file(file)
-    if MEAN_TYPE == "month":
-        for file in files:
+        case "month":
             mean_on_month(file)
-
+        case _:
+            print(Exception("Invalid value for MEAN_TYPE"))
+            
 def split_file(file_name):
-    file_content = pd.read_csv(f"filled_data/{file_name}.csv")
+    file_content = pd.read_csv(f"data/temp_files/{file_name}.csv")
 
     first_index  = len(file_content) - 24
     second_index = len(file_content) - 12
@@ -139,33 +176,28 @@ def split_file(file_name):
     dev_data   = file_content[first_index:second_index]
     test_data  = file_content[second_index:]
 
-    train_data.to_csv(f"split_data/train_data/{file_name}.csv", index=False)
-    dev_data.to_csv(f"split_data/dev_data/{file_name}.csv", index=False)
-    test_data.to_csv(f"split_data/test_data/{file_name}.csv", index=False)
+    train_data.to_csv(f"data/split_data/train_data/{file_name}.csv", index=False)
+    dev_data.to_csv(f"data/split_data/dev_data/{file_name}.csv", index=False)
+    test_data.to_csv(f"data/split_data/test_data/{file_name}.csv", index=False)
 
-def split_all_files():
-    files = get_files_name()
-
-    for file in files: 
-        split_file(file)
-
-
-def main(na_threshhold):
+def main():
     if not QUIET:
         print("Commenting OUVRAGES.csv")
-    comment_files(na_threshhold)
-    if NORMALIZE:   
-        normalize_all_files()
+    comment_files(NA_THRESHHOLD)
+    
+    for file in get_files_name():
+        if NORMALIZE:   
+            normalize_file(file)
 
-    if not QUIET:
-        print("Filling the NanS with mean")
-    mean_all_files()
+        if not QUIET:
+            print("Filling the NanS with mean")
+        mean_file(file)
 
-    if not QUIET:
-        print("Spliting the data files")
-    split_all_files()
+        offset_file(file)
 
-# Detect only single date point NAN's (and averaging them)
+        if not QUIET:
+            print("Spliting the data files")
+        split_file(file)
 
 # get args
 NA_THRESHHOLD = -1
@@ -190,7 +222,6 @@ for var in args:
                 var = next(args)
                 if not var in ["file", "month"]:
                     raise Exception(f"Expected 'file' or 'month' after -m arg, not {var}")
-                
                 MEAN_TYPE = var
             case "make_data.py":
                 pass
@@ -201,4 +232,4 @@ for var in args:
         script_error_print("make_data.py")
         exit()
     
-main(NA_THRESHHOLD)
+main()

@@ -1,12 +1,12 @@
-from utils import script_error_print, get_files_name, is_float, is_int, is_string
+from utils import script_error_print, get_files_name
 from torch.utils.data import Dataset, DataLoader
 from torch.nn import Module, LSTM, Linear, L1Loss, MSELoss
 from torch.optim import Adam
-from tqdm.auto import tqdm
+from tqdm.auto import trange
 from sys import argv, exit
 
 import torch
-import time
+import os
 import torch.nn.init as init
 import numpy as np
 import matplotlib.pyplot as plt
@@ -40,7 +40,6 @@ class NeuralNetwork(Module):
         self.layer_size = layer_size
       
         super().__init__()
-        # self.LSTM = LSTM(input_size=input_size, layer_size, nb_layers, batch_first=True, dropout=dropout)
         self.LSTM = LSTM(
             input_size=input_size, 
             hidden_size=layer_size, 
@@ -91,12 +90,25 @@ def read_files():
     if FIRST_FILES != -1:
         files = files[:FIRST_FILES]
 
+    data_column = []
+    label_column = []
+    match MODEL_TYPE:
+        case "4-1":
+            data_column = ["P", "T", "ET", "NDVI"]
+            label_column = ["GWL"]
+        case "4-6":
+            data_column = ["P", "T", "ET", "NDVI"]
+            label_column = ["GWL+1", "GWL+2", "GWL+3", "GWL+4", "GWL+5", "GWL+6"]
+        case "5-6":
+            data_column = ["GWL", "P", "T", "ET", "NDVI"]
+            label_column = ["GWL+1", "GWL+2", "GWL+3", "GWL+4", "GWL+5", "GWL+6"]
+
     for type in ["train", "dev", "test"]:
         for file in files:
-            file_content = pd.read_csv(f"split_data/{type}_data/{file}.csv")
+            file_content = pd.read_csv(f"data/split_data/{type}_data/{file}.csv")
 
-            data[type].append(file_content[["P","T", "ET", "NDVI"]].to_numpy().astype("float32"))
-            labels[type].append(file_content[["GWL"]].to_numpy().astype("float32"))
+            data[type].append(file_content[data_column].to_numpy().astype("float32"))
+            labels[type].append(file_content[label_column].to_numpy().astype("float32"))
 
     train_dataset = GWL_Dataset(data["train"], labels["train"])
     dev_dataset   = GWL_Dataset(data["dev"]  , labels["dev"])
@@ -124,11 +136,9 @@ def train_loop(training_data, dev_data, model, path_to_save_model, path_to_save_
     train_losses = []
     dev_losses = []
 
-    iterable = range(nb_epoch)
-    if not (QUIET):
-        iterable = (bar := tqdm(range(nb_epoch)))
+    bar = trange(nb_epoch, leave=False, unit=" epoch")
 
-    for epoch in iterable:
+    for epoch in bar:
         model.train()
         train_loss = 0
         for x, y in training_data:
@@ -153,13 +163,12 @@ def train_loop(training_data, dev_data, model, path_to_save_model, path_to_save_
             best_epoch = epoch
             model.save(path_to_save_model)
 
-        if not QUIET:
-            bar.set_description(f"Current epoch: {epoch} | Best epoch {best_epoch} | Current dev loss {dev_loss:.4f} | Best dev loss {best_dev_loss:.4f}")
-            bar.update()
+        bar.set_description(f"Current epoch: {epoch} | Best epoch {best_epoch} | Current dev loss {dev_loss:.4f} | Best dev loss {best_dev_loss:.4f}")
 
-    print(f"Best model found @ epoch {best_epoch} with loss of {best_dev_loss:.4f} on the dev dataset")
+    if not QUIET:
+        print(f"Best model found @ epoch {best_epoch} with loss of {best_dev_loss:.4f} on the dev dataset")
 
-    plot(train_losses, dev_losses, path_to_save_plot)
+    return train_losses, dev_losses
 
 def test_loop(model, path_best_model, test_data, loss_fn):
     test_loss = 0
@@ -170,24 +179,29 @@ def test_loop(model, path_best_model, test_data, loss_fn):
         pred = model.forward(x)
         loss = loss_fn(pred, y)
         test_loss += loss.item() / len(test_data)
-    print(f"Loss of {test_loss:.4f} obtained with best model")
+        
+    if not QUIET: 
+        print(f"Loss of {test_loss:.4f} obtained with best model")
+        
+    return test_loss
 
-def plot(t_loss, d_loss, title):
-    x = [i for i in range(len(t_loss))]
-    index = np.argmin(d_loss)
-    d_min = np.min(d_loss)
-    t_val = t_loss[index]
+def plot(train_loss, dev_loss, test_loss, save_path):
+    x = [i for i in range(len(train_loss))]
+    index = np.argmin(dev_loss)
+    d_min = np.min(dev_loss)
+    t_val = train_loss[index]
 
-    plt.plot(x, d_loss, "-r", label="Validation loss")
-    plt.scatter([index], [d_min], color="red", label=f"Min epoch: {index}, val: {d_min:.4f}")
-    plt.plot(x, t_loss, "-b", label="Training loss")
-    plt.scatter([index], [t_val], color="blue", label=f"Val at min: {t_val:.4f}")
+    plt.plot(x, dev_loss, "-r", label="Validation loss")
+    plt.scatter([index], [d_min], color="magenta", label=f"Epoch: {index}, value: {d_min:.4f}")
+    plt.plot(x, train_loss, "-b", label="Training loss")
+    plt.scatter([index], [t_val], color="cyan", label=f"Value: {t_val:.4f}")
+    plt.plot([], [], " ", label=f"Testing loss: {test_loss:.4f}")
 
     plt.legend(loc="upper left")
     plt.xlabel("Epochs")
     plt.ylabel("Loss value")
     plt.title("Looses over time")
-    plt.savefig(title)
+    plt.savefig(save_path)
     plt.clf()
 
 # PARAMETERS
@@ -197,9 +211,6 @@ if torch.cuda.is_available():
 
 # DATA
 FIRST_FILES = -1
-MAKE_DATA = False
-NA_THRESHHOLD = -1
-FILL_DATA = False
 SHUFFLE = False
 BATCH_SIZE = 5
 
@@ -208,11 +219,11 @@ SEED = -1
 QUIET = False
 NAME = False
 
-input_size = 4
-output_size = 1
-nb_layers = 5
+input_size = -1
+output_size = -1
+nb_layers = 5       
 layer_size = 6
-dropout = 0
+dropout = 0.1
 learning_rate = 0.001
 nb_epoch = 1000
 LOSS_FUNCTION = "l1"
@@ -276,6 +287,14 @@ for var in args:
                 if not var in ["l1", "mse"]:
                     raise Exception(f"Excepted 'l1' or 'mse' after -lf arg, not: {var}")
                 LOSS_FUNCTION = var
+            case "-mt" | "--model_type":
+                var = next(args)
+                if not var in ["4-1", "4-6", "5-6"]:
+                    raise Exception(f"Excepted '4-1','4-6' or '5-6' after -mt arg, not: {var}")
+                MODEL_TYPE = var
+                split_arg = var.split("-")
+                input_size = int(split_arg[0])
+                output_size = int(split_arg[1])
             case "make_model.py":
                 pass
             case _:
@@ -286,8 +305,9 @@ for var in args:
         script_error_print("make_model.py")
         exit()
   
-path_to_best_model = f"model/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_lr_{learning_rate}_nl_{nb_layers}_ls_{layer_size}_lf_{LOSS_FUNCTION}.pt"
-path_to_plot = f"model_img/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_lr_{learning_rate}_nl_{nb_layers}_ls_{layer_size}_lf_{LOSS_FUNCTION}.png"
+path_to_best_model = f"model/test.pt"
+path_to_plot = f"model_img/nf_{FIRST_FILES}_bs_{BATCH_SIZE}_d_{dropout}_ne_{nb_epoch}_nl_{nb_layers}_ls_{layer_size}_lf_{LOSS_FUNCTION}.png"
+
 if not NAME == False:
     path_to_best_model = f"model/{NAME}.pt"
     path_to_plot = f"model_img/{NAME}.png"
@@ -296,6 +316,9 @@ if SEED != -1:
     torch.manual_seed(SEED)
     
 train_ds, dev_ds, test_ds = read_files()
+
+print(len(train_ds))
+
 train_dl, dev_dl, test_dl = create_dataloader()
 
 model = NeuralNetwork(
@@ -314,7 +337,7 @@ elif LOSS_FUNCTION == "mse":
     
 opt_fn = Adam(model.parameters(), lr=learning_rate)
 
-train_loop(train_dl, dev_dl, model, path_to_best_model, path_to_plot, loss_fn, opt_fn, nb_epoch)
-test_loop(model, path_to_best_model, test_dl, loss_fn)
-
-# test with shuffle 
+train_losses, dev_losses = train_loop(train_dl, dev_dl, model, path_to_best_model, path_to_plot, loss_fn, opt_fn, nb_epoch)
+test_loss = test_loop(model, path_to_best_model, test_dl, loss_fn)
+plot(train_losses, dev_losses, test_loss, path_to_plot)
+# TODO: Detect only single date point NAN's (and averaging them)

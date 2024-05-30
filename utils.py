@@ -12,15 +12,6 @@ def get_files_name():
 
     return return_array
 
-def is_float(list, index):
-    return (len(list) > index) and (list[index].replace(".", "", 1).isdigit())
-
-def is_int(list, index):
-    return (len(list) > index) and (list[index].isdigit())
-
-def is_string(list, index):
-    return (len(list) > index) and (list[index].isascii())
-
 def script_error_print(script):
     match script:
         case "make_data.py":
