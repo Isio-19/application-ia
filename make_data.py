@@ -5,7 +5,7 @@ import os
 import argparse
 
 def get_files_name():
-    content = pd.read_csv("OUVRAGES.csv")
+    content = pd.read_csv("OUVRAGES.csv").astype("str")
 
     names = []
     lat = []

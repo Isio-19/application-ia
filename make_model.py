@@ -80,7 +80,7 @@ class NeuralNetwork(Module):
     def load(self, path):
         self.load_state_dict(torch.load(path))
 
-def make_dataset_from_all_files(file = None):
+def make_dataset_from_all_files(file = None, region = None):
     data = {
         "train": [],
         "dev":   [],
@@ -98,7 +98,7 @@ def make_dataset_from_all_files(file = None):
     if file != None:
         files = file
     else:
-        files = get_files_name()
+        files = get_files_name(region)
         if FIRST_FILES:
             files = files[:FIRST_FILES]
 
@@ -113,6 +113,8 @@ def make_dataset_from_all_files(file = None):
     elif (MODEL_TYPE == "7-6"):
         data_column = ["year", "month", "GWL", "P", "T", "ET", "NDVI"]
         label_column = ["GWL+1", "GWL+2", "GWL+3", "GWL+4", "GWL+5", "GWL+6"]
+
+    print(files)
 
     for folder in ["train", "dev", "test"]:
         for file in files:
@@ -130,7 +132,7 @@ def make_dataset_from_all_files(file = None):
 def create_dataloader():
     train_dl = DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=SHUFFLE)
     dev_dl   = DataLoader(dev_ds,   batch_size=BATCH_SIZE, shuffle=SHUFFLE)
-    test_dl  = DataLoader(test_ds,  batch_size=BATCH_SIZE, shuffle=SHUFFLE)
+    test_dl  = DataLoader(test_ds,  batch_size=1, shuffle=SHUFFLE)
 
     return train_dl, dev_dl, test_dl 
 
@@ -184,17 +186,28 @@ def train_loop(training_data, dev_data, model, loss_fn, opt_fn):
 
 def test_loop(model, test_data, loss_fn):
     test_loss = 0
+    test_losses = []
     model.load(PATH_MODEL)
     model.eval()
-
+    
     for x, y in test_data:
         pred = model.forward(x)
         loss = loss_fn(pred, y)
         test_loss += loss.item() / len(test_data)
+        test_losses.append(loss.item())
         
+    min_loss = np.min(test_losses)
+    mean_loss = np.mean(test_losses)
+    max_loss = np.max(test_losses)
+    std_loss = np.std(test_losses)
+
     if not QUIET: 
         print(f"Loss of {test_loss:.4f} obtained with best model")
-        
+        print(f"Min loss of {min_loss:.4f}")
+        print(f"Mean loss of {mean_loss:.4f}")
+        print(f"Max loss of {max_loss:.4f}")
+        print(f"Standard deviation of loss: {std_loss:.4f}")
+
     return test_loss
 
 def plot(train_loss, dev_loss, test_loss):
@@ -307,18 +320,53 @@ if __name__ == "__main__":
     if args.seed: SEED = int(args.seed)
     NAME = args.name
 
-    PATH_MODEL = f"model/{NAME}.pt"
-    PATH_PLOT    = f"img/{NAME}.png"
-    if NAME == None:
-        PATH_MODEL = f"model/{MODEL_TYPE}_{NB_LAYERS}_{LAYER_SIZE}_{BATCH_SIZE}_{NB_EPOCH}_{LEARNING_RATE}_{DROPOUT}.pt"
-        PATH_PLOT    = f"img/{MODEL_TYPE}_{NB_LAYERS}_{LAYER_SIZE}_{BATCH_SIZE}_{NB_EPOCH}_{LEARNING_RATE}_{DROPOUT}.png"
+    # PART A
+    # make a model for each file
+    # for file in get_files_name():
+    #     PATH_MODEL = f"model/single_file/{file}.pt"
+    #     PATH_PLOT    = f"img/single_file/{file}.png"
 
-    if SEED:
-        torch.manual_seed(SEED)
+    #     # Create the dataloaders
+    #     train_ds, dev_ds, test_ds = make_dataset_from_all_files([file])
+    #     train_dl, dev_dl, test_dl = create_dataloader()
+            
+    #     # Make the model
+    #     model = NeuralNetwork(
+    #         input_size=INPUT_SIZE,
+    #         output_size=OUTPUT_SIZE,
+    #         nb_layers=NB_LAYERS,
+    #         layer_size=LAYER_SIZE,
+    #         dropout=DROPOUT,
+    #     )
+        
+    #     loss_fn = L1Loss()
+    #     opt_fn = Adam(model.parameters(), lr=LEARNING_RATE)
 
-    # Create the dataloaders
-    train_ds, dev_ds, test_ds = make_dataset_from_all_files()
-    train_dl, dev_dl, test_dl = create_dataloader()
+    #     # Train 
+    #     train_losses, dev_losses = train_loop(train_dl, dev_dl, model, loss_fn, opt_fn)
+        
+    #     # Test 
+    #     test_loss = test_loop(model, test_dl, loss_fn)
+        
+    #     # Save the results
+    #     best_epoch, dev_min, train_val = plot(train_losses, dev_losses, test_loss)
+    #     save_result(best_epoch, dev_min, train_val, test_loss)
+
+
+    # PART B 
+    # make a model with all the file
+    # PATH_MODEL = f"model/{NAME}.pt"
+    # PATH_PLOT    = f"img/{NAME}.png"
+    # if NAME == None:
+    #     PATH_MODEL = f"model/{MODEL_TYPE}_{NB_LAYERS}_{LAYER_SIZE}_{BATCH_SIZE}_{NB_EPOCH}_{LEARNING_RATE}_{DROPOUT}.pt"
+    #     PATH_PLOT    = f"img/{MODEL_TYPE}_{NB_LAYERS}_{LAYER_SIZE}_{BATCH_SIZE}_{NB_EPOCH}_{LEARNING_RATE}_{DROPOUT}.png"
+
+    # if SEED:
+    #     torch.manual_seed(SEED)
+
+    # # Create the dataloaders
+    # train_ds, dev_ds, test_ds = make_dataset_from_all_files()
+    # train_dl, dev_dl, test_dl = create_dataloader()
         
     # Make the model
     model = NeuralNetwork(
@@ -330,14 +378,62 @@ if __name__ == "__main__":
     )
     
     loss_fn = L1Loss()
+    # opt_fn = Adam(model.parameters(), lr=LEARNING_RATE)
+
+    # # Train 
+    # train_losses, dev_losses = train_loop(train_dl, dev_dl, model, loss_fn, opt_fn)
+    
+    # # Test 
+    # test_loss = test_loop(model, test_dl, loss_fn)
+    
+    # # Save the results
+    # best_epoch, dev_min, train_val = plot(train_losses, dev_losses, test_loss)
+    # save_result(best_epoch, dev_min, train_val, test_loss)
+
+    # PART C
+    for region in ["VIC", "QLD"]:
+        print(f"Fine-tuning on {region}")
+
+        train_ds, dev_ds, test_ds = make_dataset_from_all_files(region=region)
+        train_dl_vic, dev_dl_vic, test_dl_vic = create_dataloader()
+
+        model.load("model/all_files.pt")
+        opt_fn = Adam(model.parameters(), lr=LEARNING_RATE)
+
+        PATH_MODEL = f"model/{NAME}_VIC.pt"
+        PATH_PLOT    = f"img/{NAME}_VIC.png"
+
+        # Train 
+        train_losses, dev_losses = train_loop(train_dl_vic, dev_dl_vic, model, loss_fn, opt_fn)
+        
+        # Test 
+        test_loss = test_loop(model, test_dl_vic, loss_fn)
+        
+        # Save the results
+        best_epoch, dev_min, train_val = plot(train_losses, dev_losses, test_loss)
+        save_result(best_epoch, dev_min, train_val, test_loss)
+
+    print("Fine-tuning on QLD")
+    train_ds, dev_ds, test_ds = make_dataset_from_all_files(region="QLD")
+    train_dl_qld, dev_dl_qld, test_dl_qld = create_dataloader()
+
+    model.load("model/all_files.pt")
     opt_fn = Adam(model.parameters(), lr=LEARNING_RATE)
 
+    PATH_MODEL = f"model/{NAME}_QLD.pt"
+    PATH_PLOT    = f"img/{NAME}_QLD.png"
+
     # Train 
-    train_losses, dev_losses = train_loop(train_dl, dev_dl, model, loss_fn, opt_fn)
+    train_losses, dev_losses = train_loop(train_dl_qld, dev_dl_qld, model, loss_fn, opt_fn)
     
     # Test 
-    test_loss = test_loop(model, test_dl, loss_fn)
+    test_loss = test_loop(model, test_dl_qld, loss_fn)
     
     # Save the results
     best_epoch, dev_min, train_val = plot(train_losses, dev_losses, test_loss)
     save_result(best_epoch, dev_min, train_val, test_loss)
+
+    # PART D 
+    # for loop to iterate on the first 20 files
+
+
