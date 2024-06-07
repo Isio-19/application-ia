@@ -17,5 +17,5 @@ echo "Environment activated"
 
 # make_data.py [-h] [-n {all,no_gwl}] [-mf] [-q] na_threshold {file,month,none}
 # make_model.py [-h] [-s] [-q] [-ff FIRST_FILES] [--seed SEED] [--name NAME] {6-1,6-6,7-6} nb_layer layer_size batch_size nb_epoch learning_rate dropout
-python3 -u make_data.py 0.2 month
-python3 -u make_model.py 6-1 3 256 128 1500 0.0001 0.2 -s --name all_files_raw
+python3 -u make_data.py 0.2 month -n all -mf
+python3 -u make_model.py 6-1 3 256 128 1500 0.0001 0.2 -s --name finetune
