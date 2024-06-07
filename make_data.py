@@ -252,6 +252,12 @@ if __name__ == "__main__":
         files, lat, long, region = get_files_name()
         for i, file in enumerate(files) :
             add_position(file, lat[i], long[i], region[i])
+
+            if not os.path.exists("data/norm"):
+                os.makedirs("data/norm")
+            if not os.path.exists("data/norm_no_gwl"):
+                os.makedirs("data/norm_no_gwl")
+
             create_norm_and_no_gwl_files(file)
             
             for type in ["raw", "norm", "norm_no_gwl"]:

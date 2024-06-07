@@ -1,8 +1,10 @@
 __pycache__/
-data/split_data/*
-data/temp_files/*
+data/split_data/*.csv
+data/temp_files/*.csv
+data/norm/*.csv
+data/norm_no_gwl/*.csv
 model/*
-model_img/*
+img/*
 isio_internship.sh
 plot.png
 truc_bizarre/
